@@ -1,4 +1,12 @@
 /**
+ * Interface for entities that need cleanup when the game stops.
+ * Implement this for entities that hold event listeners, timers, or external resources.
+ */
+export interface Destroyable {
+  destroy(): void;
+}
+
+/**
  * Abstract Game base class
  * Handles canvas setup, high-DPI scaling, resize events, and the RAF loop.
  * Extend this class and implement update() and render() to create a game.
@@ -8,6 +16,12 @@ export abstract class Game {
   protected ctx: CanvasRenderingContext2D;
   private lastTime: number = 0;
   private running: boolean = false;
+
+  /** Registered entities that will be destroyed when the game stops */
+  private entities: Destroyable[] = [];
+
+  /** Bound resize handler for proper cleanup */
+  private boundResize = this.resize.bind(this);
 
   constructor(canvasId: string = 'game-canvas') {
     // Create and setup canvas
@@ -24,7 +38,7 @@ export abstract class Game {
 
     // Initial resize and setup listeners
     this.resize();
-    window.addEventListener('resize', () => this.resize());
+    window.addEventListener('resize', this.boundResize);
 
     // Start the game loop
     this.start();
@@ -41,6 +55,15 @@ export abstract class Game {
   }
 
   /**
+   * Register an entity for automatic cleanup when the game stops.
+   * Returns the entity for chaining.
+   */
+  protected registerEntity<T extends Destroyable>(entity: T): T {
+    this.entities.push(entity);
+    return entity;
+  }
+
+  /**
    * Handle window resize and high-DPI scaling
    */
   private resize(): void {
@@ -54,8 +77,8 @@ export abstract class Game {
     this.canvas.width = this.width * dpr;
     this.canvas.height = this.height * dpr;
 
-    // Scale the context to account for the DPR
-    this.ctx.scale(dpr, dpr);
+    // Reset and scale the context atomically to avoid transform stacking
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     // Notify subclass of resize
     this.onResize();
@@ -68,9 +91,22 @@ export abstract class Game {
     requestAnimationFrame((time) => this.loop(time));
   }
 
-  /** Stop the game loop */
+  /**
+   * Stop the game loop and clean up all resources.
+   * Override in subclass to add additional cleanup, but always call super.stop().
+   */
   public stop(): void {
     this.running = false;
+
+    // Remove window listeners
+    window.removeEventListener('resize', this.boundResize);
+
+    // Destroy all registered entities
+    this.entities.forEach((entity) => entity.destroy());
+    this.entities = [];
+
+    // Remove canvas from DOM
+    this.canvas.remove();
   }
 
   /** Main game loop using requestAnimationFrame */

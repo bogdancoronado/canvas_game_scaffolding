@@ -1,6 +1,6 @@
 import { Game } from './Game';
 import { Ball, Paddle, Brick, createBrickGrid } from './entities';
-import { aabbCollision, getCollisionSide } from './utils/math';
+import { aabbCollision, rayIntersectsAABB, Vector2 } from './utils/math';
 
 type GameState = 'playing' | 'won' | 'lost';
 
@@ -16,6 +16,14 @@ export class ArkanoidGame extends Game {
   private score: number = 0;
   private keys: Set<string> = new Set();
 
+  // Bound event handlers for proper cleanup
+  private boundKeyDown = this.handleKeyDown.bind(this);
+  private boundKeyUp = this.handleKeyUp.bind(this);
+  private boundMouseMove = this.handleMouseMove.bind(this);
+  private boundTouchMove = this.handleTouchMove.bind(this);
+  private boundClick = this.handleClick.bind(this);
+  private boundTouchStart = this.handleTouchStart.bind(this);
+
   constructor() {
     super('game-canvas');
 
@@ -25,6 +33,19 @@ export class ArkanoidGame extends Game {
 
     this.setupInputs();
     this.resetLevel();
+  }
+
+  public override stop(): void {
+    // Remove all input listeners
+    window.removeEventListener('keydown', this.boundKeyDown);
+    window.removeEventListener('keyup', this.boundKeyUp);
+    window.removeEventListener('mousemove', this.boundMouseMove);
+    window.removeEventListener('touchmove', this.boundTouchMove);
+    window.removeEventListener('click', this.boundClick);
+    window.removeEventListener('touchstart', this.boundTouchStart);
+
+    // Call parent cleanup
+    super.stop();
   }
 
   protected onResize(): void {
@@ -44,27 +65,41 @@ export class ArkanoidGame extends Game {
     this.ball = new Ball(this.paddle.x, this.paddle.y - 20);
   }
 
+  // Input handler methods
+  private handleKeyDown(e: KeyboardEvent): void {
+    this.keys.add(e.key);
+  }
+
+  private handleKeyUp(e: KeyboardEvent): void {
+    this.keys.delete(e.key);
+  }
+
+  private handleMouseMove(e: MouseEvent): void {
+    this.paddle.setTarget(e.clientX);
+  }
+
+  private handleTouchMove(e: TouchEvent): void {
+    e.preventDefault();
+    if (e.touches.length > 0) {
+      this.paddle.setTarget(e.touches[0].clientX);
+    }
+  }
+
+  private handleClick(): void {
+    this.handleRestart();
+  }
+
+  private handleTouchStart(): void {
+    this.handleRestart();
+  }
+
   private setupInputs(): void {
-    // Keyboard
-    window.addEventListener('keydown', (e) => this.keys.add(e.key));
-    window.addEventListener('keyup', (e) => this.keys.delete(e.key));
-
-    // Mouse
-    window.addEventListener('mousemove', (e) => {
-      this.paddle.setTarget(e.clientX);
-    });
-
-    // Touch
-    window.addEventListener('touchmove', (e) => {
-      e.preventDefault();
-      if (e.touches.length > 0) {
-        this.paddle.setTarget(e.touches[0].clientX);
-      }
-    }, { passive: false });
-
-    // Restart on click/touch when game over
-    window.addEventListener('click', () => this.handleRestart());
-    window.addEventListener('touchstart', () => this.handleRestart());
+    window.addEventListener('keydown', this.boundKeyDown);
+    window.addEventListener('keyup', this.boundKeyUp);
+    window.addEventListener('mousemove', this.boundMouseMove);
+    window.addEventListener('touchmove', this.boundTouchMove, { passive: false });
+    window.addEventListener('click', this.boundClick);
+    window.addEventListener('touchstart', this.boundTouchStart);
   }
 
   private handleRestart(): void {
@@ -87,16 +122,26 @@ export class ArkanoidGame extends Game {
     }
 
     this.paddle.update(dt, this.width);
+
+    // Store ball position before movement for CCD
+    const ballPreviousPosition = this.ball.position.clone();
     this.ball.update(dt);
 
-    this.handleCollisions();
+    this.handleCollisions(ballPreviousPosition, dt);
     this.checkWinCondition();
   }
 
-  private handleCollisions(): void {
+  /**
+   * Handle all collision detection and response.
+   * Uses CCD (Continuous Collision Detection) for brick collisions to prevent tunneling.
+   * 
+   * @param ballPreviousPosition - Ball position before this frame's movement
+   * @param dt - Delta time for this frame (unused but available for future physics)
+   */
+  private handleCollisions(ballPreviousPosition: Vector2, _dt: number): void {
     const ball = this.ball;
 
-    // Wall collisions
+    // Wall collisions (simple overlap check is sufficient for walls)
     if (ball.position.x - ball.radius <= 0 || ball.position.x + ball.radius >= this.width) {
       ball.reflectX();
       ball.position.x = Math.max(ball.radius, Math.min(this.width - ball.radius, ball.position.x));
@@ -117,26 +162,46 @@ export class ArkanoidGame extends Game {
       return;
     }
 
-    // Paddle collision
+    // Paddle collision (simple AABB is fine - paddle is wide and always below ball)
     if (aabbCollision(ball.bounds, this.paddle.bounds) && ball.velocity.y > 0) {
       ball.reflectOffPaddle(this.paddle.centerX, this.paddle.width);
       ball.position.y = this.paddle.y - ball.radius;
     }
 
-    // Brick collisions
+    // Brick collisions using CCD (Continuous Collision Detection)
+    // This prevents the ball from tunneling through thin bricks at high speed
+    const ballMovement = new Vector2(
+      ball.position.x - ballPreviousPosition.x,
+      ball.position.y - ballPreviousPosition.y
+    );
+
     for (const brick of this.bricks) {
       if (!brick.alive) continue;
 
-      const side = getCollisionSide(ball.bounds, brick.bounds, ball.velocity);
-      if (side) {
+      // Expand the brick bounds by ball radius to treat the ball as a point
+      // This is a common technique: "Minkowski sum" collision
+      const expandedBrickBounds = {
+        x: brick.bounds.x - ball.radius,
+        y: brick.bounds.y - ball.radius,
+        width: brick.bounds.width + ball.radius * 2,
+        height: brick.bounds.height + ball.radius * 2,
+      };
+
+      const hit = rayIntersectsAABB(ballPreviousPosition, ballMovement, expandedBrickBounds);
+      if (hit && hit.contactTime >= 0) {
         brick.hit();
         this.score += 10;
 
-        if (side === 'top' || side === 'bottom') {
-          ball.reflectY();
-        } else {
+        // Move ball to contact point (slightly offset to prevent re-collision)
+        ball.position = hit.contactPoint.add(hit.contactNormal.scale(0.1));
+
+        // Reflect based on which face was hit
+        if (hit.contactNormal.x !== 0) {
           ball.reflectX();
+        } else {
+          ball.reflectY();
         }
+
         break; // Only hit one brick per frame
       }
     }
