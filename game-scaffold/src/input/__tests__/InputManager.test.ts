@@ -14,33 +14,33 @@ describe('InputManager', () => {
 
   describe('keyboard', () => {
     it('tracks key down state', () => {
-      expect(input.isKeyDown('a')).toBe(false);
+      expect(input.isKeyDown('KeyA')).toBe(false);
 
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
-      expect(input.isKeyDown('a')).toBe(true);
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyA' }));
+      expect(input.isKeyDown('KeyA')).toBe(true);
 
-      window.dispatchEvent(new KeyboardEvent('keyup', { key: 'a' }));
-      expect(input.isKeyDown('a')).toBe(false);
+      window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyA' }));
+      expect(input.isKeyDown('KeyA')).toBe(false);
     });
 
     it('tracks key pressed (first frame only)', () => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b' }));
-      expect(input.isKeyPressed('b')).toBe(true);
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyB' }));
+      expect(input.isKeyPressed('KeyB')).toBe(true);
 
       input.endFrame();
-      expect(input.isKeyPressed('b')).toBe(false);
-      expect(input.isKeyDown('b')).toBe(true); // Still down
+      expect(input.isKeyPressed('KeyB')).toBe(false);
+      expect(input.isKeyDown('KeyB')).toBe(true); // Still down
     });
 
     it('tracks key released (first frame only)', () => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c' }));
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyC' }));
       input.endFrame();
 
-      window.dispatchEvent(new KeyboardEvent('keyup', { key: 'c' }));
-      expect(input.isKeyReleased('c')).toBe(true);
+      window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyC' }));
+      expect(input.isKeyReleased('KeyC')).toBe(true);
 
       input.endFrame();
-      expect(input.isKeyReleased('c')).toBe(false);
+      expect(input.isKeyReleased('KeyC')).toBe(false);
     });
   });
 
@@ -77,8 +77,8 @@ describe('InputManager', () => {
       input.destroy();
 
       // Key events should no longer work
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x' }));
-      expect(input.isKeyDown('x')).toBe(false);
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyX' }));
+      expect(input.isKeyDown('KeyX')).toBe(false);
     });
   });
 });

@@ -3,6 +3,21 @@ import { SpaceShip } from './entities/SpaceShip';
 import { CubeObstacle } from './entities/CubeObstacle';
 import { Vector2 } from './utils/math';
 
+/**
+ * Cosmic Cube Runner - An infinite runner in pseudo-3D space.
+ *
+ * The player pilots a spaceship through an oncoming field of cube obstacles,
+ * using perspective projection to create depth on a 2D canvas. Features:
+ * - Procedurally spawned obstacles with increasing difficulty
+ * - Speed increases as score grows
+ * - Starfield parallax background
+ * - Simple X-distance collision at player Z-depth
+ *
+ * @extends Game
+ * @see SpaceShip for player entity
+ * @see CubeObstacle for obstacle entities
+ * @see docs/cosmic.md for full design documentation
+ */
 export class CosmicGame extends Game {
   private ship: SpaceShip;
   private obstacles: CubeObstacle[] = [];
@@ -12,8 +27,8 @@ export class CosmicGame extends Game {
   private spawnTimer: number = 0;
   private isGameOver: boolean = false;
 
-  constructor() {
-    super('game-canvas');
+  constructor(onReturnToMenu?: () => void) {
+    super('game-canvas', onReturnToMenu);
     this.ship = new SpaceShip();
   }
 
@@ -65,7 +80,10 @@ export class CosmicGame extends Game {
   protected render(): void {
     // Check for pause toggle
     if (this.input.isKeyPressed('Escape') && !this.isGameOver) {
-      this.togglePause();
+      if (!this.isPaused) {
+        this.pause();
+      }
+      // When paused, ESC is handled by base class pause menu
     }
 
     // 1. Clear Background (Deep Space)
@@ -136,16 +154,7 @@ export class CosmicGame extends Game {
 
     // Pause Overlay
     if (this.isPaused) {
-      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-      this.ctx.fillRect(0, 0, this.width, this.height);
-
-      this.ctx.fillStyle = '#fff';
-      this.ctx.textAlign = 'center';
-      this.ctx.font = '40px monospace';
-      this.ctx.fillText('PAUSED', this.width / 2, this.height / 2);
-      this.ctx.font = '20px monospace';
-      this.ctx.fillText('Press ESC to Resume', this.width / 2, this.height / 2 + 40);
-      this.ctx.textAlign = 'left';
+      this.renderPauseMenu();
       return;
     }
 

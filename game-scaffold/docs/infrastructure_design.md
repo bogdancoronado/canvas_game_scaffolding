@@ -263,7 +263,7 @@ classDiagram
         +resume(): void
         +togglePause(): void
         +setScene(scene): void
-        +getScene(): Scene | null
+    #getScene(): Scene | null
         -resize(): void
         -loop(currentTime): void
         #update(dt: number)*
@@ -285,6 +285,21 @@ classDiagram
 
     Game <|-- ArkanoidGame
 ```
+
+#### 2.5D Graphics Engine (`src/core/3d/`)
+
+The framework now includes a dedicated 3D rendering module designed for "Doom-style" environments.
+
+- **`Camera.ts`**: Manages view position, rotation (yaw), and field of view.
+- **`Mesh.ts`**: Represents 3D objects as collections of "faces" (vertical walls).
+- **`Renderer3D.ts`**: Implements the graphics pipeline:
+    1.  **World Transform**: Local -> World.
+    2.  **View Transform**: World -> View (relative to Camera).
+    3.  **Clipping**: Near-plane clipping to prevent rendering errors.
+    4.  **Projection**: Metric 3D coordinates -> Screen 2D coordinates.
+    5.  **Rasterization**: Canvas 2D path filling.
+
+See [`docs/3d_engine_design.md`](./3d_engine_design.md) for full architectural details.
 
 #### Implementation Reference
 
@@ -476,10 +491,14 @@ After this transformation, game code can draw at coordinates like `(100, 100)` a
     ├──── width ────┤
     ┌───────────────┐ ─┬─ y
     │               │  │
-    │     AABB      │  height
+    │  BoundingBox  │  height
     │               │  │
     └───────────────┘ ─┴─
 ```
+
+> [!NOTE]
+> In the codebase, the type is named `BoundingBox` for better self-documentation.
+> The abbreviation `AABB` is available as a deprecated type alias for backwards compatibility.
 
 #### Why Use AABB for Collision Detection?
 

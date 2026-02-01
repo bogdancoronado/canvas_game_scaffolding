@@ -33,7 +33,7 @@ export class Vector2 {
 }
 
 /**
- * Axis-Aligned Bounding Box (AABB)
+ * Axis-Aligned Bounding Box
  * 
  * A rectangular collision shape that is always aligned with the coordinate axes
  * (never rotated). This is the most common and efficient collision shape for 2D games.
@@ -44,17 +44,17 @@ export class Vector2 {
  *     ├──── width ────┤
  *     ┌───────────────┐ ─┬─ y
  *     │               │  │
- *     │     AABB      │  height
+ *     │  BoundingBox  │  height
  *     │               │  │
  *     └───────────────┘ ─┴─
  * 
- * Why AABB?
+ * Why use axis-aligned bounding boxes?
  * - Very fast collision detection (only 4 comparisons)
  * - Simple to implement and debug
  * - Memory efficient (only 4 numbers)
  * - Sufficient accuracy for most arcade-style games
  */
-export interface AABB {
+export interface BoundingBox {
   /** Left edge X position */
   x: number;
   /** Top edge Y position */
@@ -66,10 +66,15 @@ export interface AABB {
 }
 
 /**
- * Check if two Axis-Aligned Bounding Boxes are overlapping.
+ * @deprecated Use BoundingBox instead. This alias exists for backwards compatibility.
+ */
+export type AABB = BoundingBox;
+
+/**
+ * Check if two bounding boxes are overlapping.
  * 
  * This is the fastest possible rectangle intersection test, requiring only
- * 4 comparisons. Two AABBs overlap if and only if they overlap on BOTH axes.
+ * 4 comparisons. Two boxes overlap if and only if they overlap on BOTH axes.
  * 
  * The test checks:
  * 1. A's left edge is left of B's right edge
@@ -81,7 +86,7 @@ export interface AABB {
  * @param b Second bounding box
  * @returns true if the boxes overlap, false otherwise
  */
-export function aabbCollision(a: AABB, b: AABB): boolean {
+export function checkBoundingBoxCollision(a: BoundingBox, b: BoundingBox): boolean {
   return (
     a.x < b.x + b.width &&      // A's left < B's right
     a.x + a.width > b.x &&      // A's right > B's left
@@ -89,6 +94,11 @@ export function aabbCollision(a: AABB, b: AABB): boolean {
     a.y + a.height > b.y        // A's bottom > B's top
   );
 }
+
+/**
+ * @deprecated Use checkBoundingBoxCollision instead.
+ */
+export const aabbCollision = checkBoundingBoxCollision;
 
 /**
  * Determine which side of the target box was hit by a moving box.
@@ -107,11 +117,11 @@ export function aabbCollision(a: AABB, b: AABB): boolean {
  * @returns 'top', 'bottom', 'left', 'right', or null if no collision
  */
 export function getCollisionSide(
-  ball: AABB,
-  target: AABB,
+  ball: BoundingBox,
+  target: BoundingBox,
   ballVelocity: Vector2
 ): 'top' | 'bottom' | 'left' | 'right' | null {
-  if (!aabbCollision(ball, target)) return null;
+  if (!checkBoundingBoxCollision(ball, target)) return null;
 
   // Calculate how deep the overlap is on each side
   const overlapLeft = ball.x + ball.width - target.x;
@@ -156,7 +166,7 @@ export interface RaycastHit {
 }
 
 /**
- * Test if a ray intersects an Axis-Aligned Bounding Box using the slab method.
+ * Test if a ray intersects a bounding box using the slab method.
  * 
  * This is used for Continuous Collision Detection (CCD) to prevent fast-moving
  * objects from tunneling through thin targets. Instead of checking if boxes
@@ -168,13 +178,13 @@ export interface RaycastHit {
  * 
  * @param rayOrigin - Starting point of the ray (object's position before movement)
  * @param rayDirection - Movement vector for this frame (velocity × dt, not normalized)
- * @param box - The axis-aligned bounding box to test against
+ * @param box - The bounding box to test against
  * @returns Hit information if intersection occurs within ray length, null otherwise
  * 
  * @example
  * ```typescript
  * const movement = ball.velocity.scale(dt);
- * const hit = rayIntersectsAABB(ball.position, movement, brick.bounds);
+ * const hit = rayIntersectsBoundingBox(ball.position, movement, brick.bounds);
  * if (hit) {
  *   ball.position = hit.contactPoint;
  *   if (hit.contactNormal.x !== 0) ball.reflectX();
@@ -182,10 +192,10 @@ export interface RaycastHit {
  * }
  * ```
  */
-export function rayIntersectsAABB(
+export function rayIntersectsBoundingBox(
   rayOrigin: Vector2,
   rayDirection: Vector2,
-  box: AABB
+  box: BoundingBox
 ): RaycastHit | null {
   // Avoid division by zero: use Infinity for axis-aligned rays
   // (if direction.x is 0, the ray never crosses vertical edges)
@@ -251,4 +261,53 @@ export function rayIntersectsAABB(
   }
 
   return { contactTime, contactPoint, contactNormal };
+}
+
+/**
+ * @deprecated Use rayIntersectsBoundingBox instead.
+ */
+export const rayIntersectsAABB = rayIntersectsBoundingBox;
+
+/**
+ * Rotate a 2D vector by a given angle (in radians).
+ * Useful for camera rotation (yaw).
+ */
+export function rotateVector2(v: Vector2, angle: number): Vector2 {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return new Vector2(
+    v.x * cos - v.y * sin,
+    v.x * sin + v.y * cos
+  );
+}
+
+/**
+ * Linear Interpolation between two numbers
+ */
+export function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+/**
+ * Find the intersection point of two infinite lines defined by (p1, p2) and (p3, p4).
+ * Returns null if parallel.
+ */
+export function intersectLineLine(
+  p1: Vector2, p2: Vector2,
+  p3: Vector2, p4: Vector2
+): Vector2 | null {
+  const x1 = p1.x, y1 = p1.y;
+  const x2 = p2.x, y2 = p2.y;
+  const x3 = p3.x, y3 = p3.y;
+  const x4 = p4.x, y4 = p4.y;
+
+  const denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
+  if (denom === 0) return null;
+
+  const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
+
+  return new Vector2(
+    x1 + ua * (x2 - x1),
+    y1 + ua * (y2 - y1)
+  );
 }

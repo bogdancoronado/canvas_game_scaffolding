@@ -1,6 +1,6 @@
 import type { Entity } from '../core/Entity';
 import { Vector3 } from '../utils/Vector3';
-import type { AABB } from '../utils/math';
+import type { BoundingBox } from '../utils/math';
 
 /**
  * Paddle entity - player controlled
@@ -40,7 +40,7 @@ export class Paddle implements Entity {
     this.position.y = value;
   }
 
-  get bounds(): AABB {
+  get bounds(): BoundingBox {
     return {
       x: this.position.x - this.width / 2,
       y: this.position.y,

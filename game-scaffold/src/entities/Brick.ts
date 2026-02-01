@@ -1,6 +1,6 @@
 import type { Entity } from '../core/Entity';
 import { Vector3 } from '../utils/Vector3';
-import type { AABB } from '../utils/math';
+import type { BoundingBox } from '../utils/math';
 
 /**
  * Brick colors by row for visual variety
@@ -36,7 +36,7 @@ export class Brick implements Entity {
   get x(): number { return this.position.x; }
   get y(): number { return this.position.y; }
 
-  get bounds(): AABB {
+  get bounds(): BoundingBox {
     return {
       x: this.position.x,
       y: this.position.y,

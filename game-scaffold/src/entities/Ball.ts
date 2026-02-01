@@ -1,7 +1,7 @@
 import type { Entity } from '../core/Entity';
 import { Vector3 } from '../utils/Vector3';
 import { Vector2 } from '../utils/math';
-import type { AABB } from '../utils/math';
+import type { BoundingBox } from '../utils/math';
 
 /**
  * Ball entity - bounces around and destroys bricks
@@ -24,7 +24,7 @@ export class Ball implements Entity {
     this.velocity = new Vector2(Math.cos(angle) * speed, Math.sin(angle) * speed);
   }
 
-  get bounds(): AABB {
+  get bounds(): BoundingBox {
     return {
       x: this.position.x - this.radius,
       y: this.position.y - this.radius,

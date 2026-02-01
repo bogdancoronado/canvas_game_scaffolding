@@ -85,6 +85,13 @@ export class InputManager {
   }
 
   /**
+   * Debug helper: Get number of currently held keys.
+   */
+  get activeKeyCount(): number {
+    return this.keysDown.size;
+  }
+
+  /**
    * Check if a key was just pressed this frame.
    * Only true for one frame when the key transitions from up to down.
    */
@@ -161,26 +168,25 @@ export class InputManager {
     // Prevent default scrolling/browser actions for game keys
     const gameKeys = new Set([
       'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
-      ' ', 'Space', // Space can be ' ' or 'Space'
-      'w', 'a', 's', 'd',
-      'W', 'A', 'S', 'D'
+      'Space',
+      'KeyW', 'KeyA', 'KeyS', 'KeyD'
     ]);
 
-    if (gameKeys.has(e.key)) {
+    if (gameKeys.has(e.code)) {
       e.preventDefault();
     }
 
-    if (!this.keysDown.has(e.key)) {
-      this.keysPressed.add(e.key);
+    if (!this.keysDown.has(e.code)) {
+      this.keysPressed.add(e.code);
     }
-    this.keysDown.add(e.key);
+    this.keysDown.add(e.code);
   }
 
   private handleKeyUp(e: KeyboardEvent): void {
-    if (this.keysDown.has(e.key)) {
-      this.keysReleased.add(e.key);
+    if (this.keysDown.has(e.code)) {
+      this.keysReleased.add(e.code);
     }
-    this.keysDown.delete(e.key);
+    this.keysDown.delete(e.code);
   }
 
   private handleMouseMove(e: MouseEvent): void {

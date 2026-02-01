@@ -1,4 +1,4 @@
-import type { AABB } from '../utils/math';
+import type { BoundingBox } from '../utils/math';
 import { Vector3 } from '../utils/Vector3';
 
 /**
@@ -24,7 +24,7 @@ export interface Entity {
    * Axis-aligned bounding box for collision detection.
    * This should be the 2D projection of the entity's hitbox.
    */
-  readonly bounds: AABB;
+  readonly bounds: BoundingBox;
 
   /**
    * Update the entity's state.

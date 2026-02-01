@@ -1,12 +1,24 @@
 import { Vector2 } from '../utils/math';
 import { Vector3 } from '../utils/Vector3';
-import type { AABB } from '../utils/math';
+import type { BoundingBox } from '../utils/math';
 
+/**
+ * A cube-shaped obstacle in the Cosmic Cube Runner game.
+ *
+ * Cubes spawn at a far Z distance and move toward the camera (decreasing Z),
+ * creating the illusion of flying through space. They are rendered as
+ * wireframe cubes using perspective projection.
+ *
+ * Collision is checked when the cube's Z ≈ player's Z (the ship is at Z=1).
+ *
+ * @see CosmicGame for game logic
+ * @see docs/cosmic.md for full design documentation
+ */
 export class CubeObstacle {
   position: Vector3;
   size: number = 50; // Size of the cube
   destroyed: boolean = false;
-  bounds: AABB; // Unused for interface, custom collision used
+  bounds: BoundingBox; // Unused for interface, custom collision used
 
   private color: string;
 

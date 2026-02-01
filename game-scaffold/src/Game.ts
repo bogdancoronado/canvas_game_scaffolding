@@ -45,10 +45,19 @@ export abstract class Game {
   private running: boolean = false;
   private paused: boolean = false;
 
+  /** Callback to return to the game launcher menu */
+  private onReturnToMenu: (() => void) | null = null;
+
+  /** Currently selected pause menu option (0 = Resume, 1 = Return to Menu) */
+  private pauseMenuSelection: number = 0;
+
   /** Bound resize handler for proper cleanup */
   private boundResize = this.resize.bind(this);
 
-  constructor(canvasId: string = 'game-canvas') {
+  constructor(canvasId: string = 'game-canvas', onReturnToMenu?: () => void) {
+    // Store callback for returning to menu
+    this.onReturnToMenu = onReturnToMenu || null;
+
     // Create input manager first (starts listening immediately)
     this.input = new InputManager();
 
@@ -139,6 +148,119 @@ export abstract class Game {
     }
   }
 
+  // === Pause Menu ===
+
+  /**
+   * Handle pause menu input.
+   * Called from the game loop when paused.
+   */
+  private handlePauseMenuInput(): void {
+    // Navigate menu
+    if (this.input.isKeyPressed('ArrowUp') || this.input.isKeyPressed('w')) {
+      this.pauseMenuSelection = 0;
+    }
+    if (this.input.isKeyPressed('ArrowDown') || this.input.isKeyPressed('s')) {
+      this.pauseMenuSelection = 1;
+    }
+
+    // ESC to resume
+    if (this.input.isKeyPressed('Escape')) {
+      this.resume();
+      return;
+    }
+
+    // Enter to select
+    if (this.input.isKeyPressed('Enter') || this.input.isKeyPressed(' ')) {
+      if (this.pauseMenuSelection === 0) {
+        this.resume();
+      } else if (this.pauseMenuSelection === 1 && this.onReturnToMenu) {
+        this.onReturnToMenu();
+      }
+    }
+
+    // Click handling
+    if (this.input.isPointerPressed()) {
+      const pointer = this.input.pointerPosition;
+      if (pointer) {
+        const menuY = this.height / 2;
+        const buttonWidth = 200;
+        const buttonHeight = 50;
+        const buttonX = (this.width - buttonWidth) / 2;
+
+        // Resume button
+        if (pointer.x >= buttonX && pointer.x <= buttonX + buttonWidth &&
+          pointer.y >= menuY - 20 && pointer.y <= menuY - 20 + buttonHeight) {
+          this.resume();
+        }
+        // Return to Menu button
+        if (this.onReturnToMenu &&
+          pointer.x >= buttonX && pointer.x <= buttonX + buttonWidth &&
+          pointer.y >= menuY + 50 && pointer.y <= menuY + 50 + buttonHeight) {
+          this.onReturnToMenu();
+        }
+      }
+    }
+  }
+
+  /**
+   * Render the unified pause menu overlay.
+   * Games should call this at the end of their render() when isPaused is true.
+   */
+  protected renderPauseMenu(): void {
+    const ctx = this.ctx;
+    const centerX = this.width / 2;
+    const centerY = this.height / 2;
+
+    // Dim overlay
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    // Pause icon (two vertical bars)
+    ctx.fillStyle = '#fff';
+    const barWidth = 20;
+    const barHeight = 60;
+    const gap = 20;
+    ctx.fillRect(centerX - gap / 2 - barWidth, centerY - 100 - barHeight / 2, barWidth, barHeight);
+    ctx.fillRect(centerX + gap / 2, centerY - 100 - barHeight / 2, barWidth, barHeight);
+
+    // Title
+    ctx.font = 'bold 32px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('PAUSED', centerX, centerY - 30);
+
+    // Menu buttons
+    const buttonWidth = 200;
+    const buttonHeight = 50;
+    const buttonX = centerX - buttonWidth / 2;
+
+    // Resume button
+    const resumeSelected = this.pauseMenuSelection === 0;
+    ctx.fillStyle = resumeSelected ? '#4CAF50' : '#333';
+    ctx.beginPath();
+    ctx.roundRect(buttonX, centerY + 20, buttonWidth, buttonHeight, 8);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 18px system-ui, sans-serif';
+    ctx.fillText('Resume', centerX, centerY + 45);
+
+    // Return to Menu button (only if callback exists)
+    if (this.onReturnToMenu) {
+      const menuSelected = this.pauseMenuSelection === 1;
+      ctx.fillStyle = menuSelected ? '#f44336' : '#333';
+      ctx.beginPath();
+      ctx.roundRect(buttonX, centerY + 90, buttonWidth, buttonHeight, 8);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.fillText('Return to Menu', centerX, centerY + 115);
+    }
+
+    // Instructions
+    ctx.fillStyle = '#888';
+    ctx.font = '14px system-ui, sans-serif';
+    ctx.fillText('↑↓ to select, Enter to confirm, ESC to resume', centerX, this.height - 40);
+  }
+
   // === Canvas Management ===
 
   /**
@@ -208,6 +330,9 @@ export abstract class Game {
       } else {
         this.update(deltaTime);
       }
+    } else {
+      // Handle pause menu input when paused
+      this.handlePauseMenuInput();
     }
 
     // Render (always, even when paused)

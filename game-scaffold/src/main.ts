@@ -1,8 +1,10 @@
-import { CosmicGame } from './CosmicGame'
+import { GameLauncher } from './GameLauncher'
 
-// Initialize the game - handle both cases: DOM already ready or still loading
+// Initialize the game launcher - shows game selector on startup
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => new CosmicGame());
+  document.addEventListener('DOMContentLoaded', () => {
+    new GameLauncher();
+  });
 } else {
-  new CosmicGame();
+  new GameLauncher();
 }

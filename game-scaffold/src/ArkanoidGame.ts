@@ -1,6 +1,6 @@
 import { Game } from './Game';
 import { Ball, Paddle, Brick, createBrickGrid } from './entities';
-import { aabbCollision, rayIntersectsAABB, Vector2 } from './utils/math';
+import { checkBoundingBoxCollision, rayIntersectsBoundingBox, Vector2 } from './utils/math';
 
 type GameState = 'playing' | 'won' | 'lost';
 
@@ -17,8 +17,8 @@ export class ArkanoidGame extends Game {
   private lives: number = 3;
   private score: number = 0;
 
-  constructor() {
-    super('game-canvas');
+  constructor(onReturnToMenu?: () => void) {
+    super('game-canvas', onReturnToMenu);
 
     // Initialize game objects
     this.paddle = new Paddle(this.width / 2, this.height - 40);
@@ -110,7 +110,7 @@ export class ArkanoidGame extends Game {
     }
 
     // Paddle collision (simple AABB is fine - paddle is wide and always below ball)
-    if (aabbCollision(ball.bounds, this.paddle.bounds) && ball.velocity.y > 0) {
+    if (checkBoundingBoxCollision(ball.bounds, this.paddle.bounds) && ball.velocity.y > 0) {
       ball.reflectOffPaddle(this.paddle.centerX, this.paddle.width);
       ball.position.y = this.paddle.y - ball.radius;
     }
@@ -132,7 +132,7 @@ export class ArkanoidGame extends Game {
         height: brick.bounds.height + ball.radius * 2,
       };
 
-      const hit = rayIntersectsAABB(ballPreviousPosition, ballMovement, expandedBrickBounds);
+      const hit = rayIntersectsBoundingBox(ballPreviousPosition, ballMovement, expandedBrickBounds);
       if (hit && hit.contactTime >= 0) {
         brick.hit();
         this.score += 10;
@@ -162,9 +162,12 @@ export class ArkanoidGame extends Game {
   }
 
   protected render(): void {
-    // Handle pause toggle (must be in render since it runs even when paused)
+    // Handle pause toggle
     if (this.input.isKeyPressed('Escape') && (this.state === 'playing' || this.isPaused)) {
-      this.togglePause();
+      if (!this.isPaused) {
+        this.pause();
+      }
+      // When paused, ESC is handled by base class pause menu
     }
 
     const ctx = this.ctx;
@@ -183,41 +186,12 @@ export class ArkanoidGame extends Game {
 
     // Overlay messages
     if (this.isPaused) {
-      this.renderPauseOverlay();
+      this.renderPauseMenu();
     } else if (this.state === 'won') {
       this.renderMessage('🎉 YOU WIN!', 'Tap to play again');
     } else if (this.state === 'lost') {
       this.renderMessage('💀 GAME OVER', 'Tap to try again');
     }
-  }
-
-  private renderPauseOverlay(): void {
-    const ctx = this.ctx;
-
-    // Semi-transparent overlay
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    ctx.fillRect(0, 0, this.width, this.height);
-
-    // Pause icon (two vertical bars)
-    ctx.fillStyle = '#fff';
-    const barWidth = 20;
-    const barHeight = 60;
-    const gap = 20;
-    const centerX = this.width / 2;
-    const centerY = this.height / 2 - 30;
-    ctx.fillRect(centerX - gap / 2 - barWidth, centerY - barHeight / 2, barWidth, barHeight);
-    ctx.fillRect(centerX + gap / 2, centerY - barHeight / 2, barWidth, barHeight);
-
-    // Pause text
-    ctx.font = 'bold 24px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('PAUSED', this.width / 2, this.height / 2 + 40);
-
-    // Instructions
-    ctx.font = '16px system-ui, sans-serif';
-    ctx.fillStyle = '#aaa';
-    ctx.fillText('Press ESC to resume', this.width / 2, this.height / 2 + 70);
   }
 
   private renderHUD(): void {

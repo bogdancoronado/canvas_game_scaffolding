@@ -1,12 +1,27 @@
 import { Vector2 } from '../utils/math';
 import { Vector3 } from '../utils/Vector3';
 import { InputManager } from '../input/InputManager';
-import type { AABB } from '../utils/math';
+import type { BoundingBox } from '../utils/math';
 
+/**
+ * Player-controlled spaceship in the Cosmic Cube Runner game.
+ *
+ * The ship is positioned at a fixed Z depth (near the camera) and can move
+ * left/right to dodge incoming cube obstacles. Features include:
+ * - Keyboard control (arrow keys, WASD)
+ * - Visual "banking" effect when turning (ship tilts into the turn)
+ * - Perspective projection for rendering
+ *
+ * The ship doesn't use standard AABB collision - instead, the game checks
+ * X-distance when obstacles reach the player's Z depth.
+ *
+ * @see CosmicGame for game logic and collision handling
+ * @see docs/cosmic.md for full design documentation
+ */
 export class SpaceShip {
   position: Vector3;
   velocity: Vector2;
-  readonly bounds: AABB; // Logical simple bounds for interface compliance
+  readonly bounds: BoundingBox; // Logical simple bounds for interface compliance
   // Real collision checks will be custom 3D logic
 
   private speed: number = 200; // X-axis movement speed
