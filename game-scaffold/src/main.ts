@@ -1,9 +1,8 @@
-import './style.css'
-import { ArkanoidGame } from './ArkanoidGame'
+import { CosmicGame } from './CosmicGame'
 
 // Initialize the game - handle both cases: DOM already ready or still loading
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => new ArkanoidGame());
+  document.addEventListener('DOMContentLoaded', () => new CosmicGame());
 } else {
-  new ArkanoidGame();
+  new CosmicGame();
 }
