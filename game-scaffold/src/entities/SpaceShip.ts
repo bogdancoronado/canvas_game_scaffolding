@@ -21,7 +21,7 @@ export class SpaceShip {
     this.bounds = { x: 0, y: 0, width: 0, height: 0 }; // Placeholder
   }
 
-  update(dt: number, input: InputManager, screenWidth: number): void {
+  update(dt: number, input: InputManager, _screenWidth: number): void {
     // 1. Handle Input
     const moveDir = (input.isKeyDown('ArrowRight') || input.isKeyDown('d') ? 1 : 0) -
       (input.isKeyDown('ArrowLeft') || input.isKeyDown('a') ? 1 : 0);

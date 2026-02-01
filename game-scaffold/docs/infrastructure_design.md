@@ -249,16 +249,25 @@ classDiagram
         <<abstract>>
         #canvas: HTMLCanvasElement
         #ctx: CanvasRenderingContext2D
+        #input: InputManager
+        #scene: Scene | null
         -lastTime: number
         -running: boolean
+        -paused: boolean
         +width: number
         +height: number
+        +isPaused: boolean
         #start(): void
         +stop(): void
+        +pause(): void
+        +resume(): void
+        +togglePause(): void
+        +setScene(scene): void
+        +getScene(): Scene | null
         -resize(): void
         -loop(currentTime): void
-        #update(dt: number)* Logic phase
-        #render()* Display phase
+        #update(dt: number)*
+        #render()*
         #onResize(): void
     }
 
@@ -285,26 +294,19 @@ The base class is defined in [Game.ts](file:///Users/bgdan/projects/experimental
 export abstract class Game {
   protected canvas: HTMLCanvasElement;
   protected ctx: CanvasRenderingContext2D;
+  protected input: InputManager;
+  protected scene: Scene | null = null;
   
   constructor(canvasId: string = 'game-canvas') {
-    // Canvas creation and context acquisition
-    // Resize listener registration
-    // Game loop initialization
+    this.input = new InputManager(); // Initialize input
+    // ... setup canvas ...
   }
 
-  /**
-   * Update game logic - called every frame BEFORE render
-   * @param dt Delta time in seconds since last frame
-   */
+  // ... pause/resume methods ...
+
   protected abstract update(dt: number): void;
-
-  /**
-   * Render the game - called every frame AFTER update
-   * Should only draw; never modify game state here
-   */
   protected abstract render(): void;
-
-  protected onResize(): void { /* optional override */ }
+  protected onResize(): void { /* optional */ }
 }
 ```
 

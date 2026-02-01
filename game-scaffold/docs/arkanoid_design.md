@@ -90,7 +90,6 @@ classDiagram
         -state: GameState
         -lives: number
         -score: number
-        -keys: Set~string~
         +update(dt)
         +render()
         +onResize()
@@ -609,37 +608,29 @@ The game supports three input methods simultaneously:
 **Keyboard State Tracking:**
 
 ```typescript
-private keys: Set<string> = new Set();
-
-// In setupInputs():
-window.addEventListener('keydown', (e) => this.keys.add(e.key));
-window.addEventListener('keyup', (e) => this.keys.delete(e.key));
-
 // In update():
-if (this.keys.has('ArrowLeft') || this.keys.has('a')) {
+// Use the inherited input manager (this.input)
+if (this.input.isKeyDown('ArrowLeft') || this.input.isKeyDown('a')) {
   this.paddle.move(-1, dt, this.width);
 }
 ```
 
-**Why a Set?**
+**Why InputManager?**
 
-1. **O(1) lookup**: Checking if a key is pressed is constant time
-2. **No duplicates**: Holding a key won't add it multiple times
-3. **Multiple keys**: Detecting simultaneous presses is trivial
+1.  **Unified API**: Standardized access to all input types.
+2.  **Frame-Based**: Input state is captured once per frame, ensuring determinism.
+3.  **Clean Code**: No need to manually manage `Set<string>` or event listeners in the game class.
 
 **Mouse/Touch Handling:**
 
 ```typescript
-window.addEventListener('mousemove', (e) => {
-  this.paddle.setTarget(e.clientX);
-});
-
-window.addEventListener('touchmove', (e) => {
-  e.preventDefault();  // Prevent scroll/zoom
-  if (e.touches.length > 0) {
-    this.paddle.setTarget(e.touches[0].clientX);
-  }
-}, { passive: false });
+```typescript
+// In update():
+const pointer = this.input.pointerPosition;
+if (pointer) {
+  this.paddle.setTarget(pointer.x);
+}
+```
 ```
 
 **Why `passive: false`?**
@@ -649,8 +640,11 @@ To call `preventDefault()` on touch events, the listener must not be passive. Th
 **Restart Handling:**
 
 ```typescript
-window.addEventListener('click', () => this.handleRestart());
-window.addEventListener('touchstart', () => this.handleRestart());
+```typescript
+// In update():
+if ((this.state === 'won' || this.state === 'lost') && this.input.isPointerPressed()) {
+  this.handleRestart();
+}
 
 private handleRestart(): void {
   if (this.state === 'won' || this.state === 'lost') {

@@ -19,7 +19,7 @@ export class CosmicGame extends Game {
 
   protected update(dt: number): void {
     if (this.isGameOver) {
-      if (this.input.isKeyPressed('Space') || this.input.isPointerPressed()) {
+      if (this.input.isKeyPressed('Space') || this.input.isKeyPressed(' ') || this.input.isPointerPressed()) {
         this.resetGame();
       }
       return;
@@ -55,7 +55,7 @@ export class CosmicGame extends Game {
         // Check X overlap
         // Cube width is roughly 50, Ship width roughly 30
         const dist = Math.abs(ob.position.x - this.ship.position.x);
-        if (dist < 60) {
+        if (dist < 45) {
           this.gameOver();
         }
       }
@@ -63,6 +63,11 @@ export class CosmicGame extends Game {
   }
 
   protected render(): void {
+    // Check for pause toggle
+    if (this.input.isKeyPressed('Escape') && !this.isGameOver) {
+      this.togglePause();
+    }
+
     // 1. Clear Background (Deep Space)
     this.ctx.fillStyle = '#111';
     this.ctx.fillRect(0, 0, this.width, this.height);
@@ -128,6 +133,21 @@ export class CosmicGame extends Game {
     this.ctx.font = '20px monospace';
     this.ctx.fillText(`SCORE: ${this.score}`, 20, 30);
     this.ctx.fillText(`SPEED: ${Math.floor(this.gameSpeed)}`, 20, 50);
+
+    // Pause Overlay
+    if (this.isPaused) {
+      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      this.ctx.fillRect(0, 0, this.width, this.height);
+
+      this.ctx.fillStyle = '#fff';
+      this.ctx.textAlign = 'center';
+      this.ctx.font = '40px monospace';
+      this.ctx.fillText('PAUSED', this.width / 2, this.height / 2);
+      this.ctx.font = '20px monospace';
+      this.ctx.fillText('Press ESC to Resume', this.width / 2, this.height / 2 + 40);
+      this.ctx.textAlign = 'left';
+      return;
+    }
 
     if (this.isGameOver) {
       this.ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';

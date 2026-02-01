@@ -152,7 +152,7 @@ In our codebase, this logic lives in the `Vector3` class.
 
 ```typescript
 // project() method in Vector3.ts
-project(focalLength: number = 1, screenCenter: Vector2): Vector2 {
+project(focalLength: number = 1, screenCenter: Vector2 = new Vector2(0, 0)): Vector2 {
   // 1. Prevent division by zero
   const safeZ = Math.max(this.z, 0.001);
   

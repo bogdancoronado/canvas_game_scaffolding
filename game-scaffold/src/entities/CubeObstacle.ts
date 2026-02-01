@@ -77,7 +77,7 @@ export class CubeObstacle {
     ctx.stroke();
   }
 
-  private fadeColor(hex: string, z: number): string {
+  private fadeColor(hex: string, _z: number): string {
     // Fade alpha based on distance
     // Close (z=1) -> Alpha 1
     // Far (z=100) -> Alpha 0

@@ -158,6 +158,18 @@ export class InputManager {
   // === Event Handlers ===
 
   private handleKeyDown(e: KeyboardEvent): void {
+    // Prevent default scrolling/browser actions for game keys
+    const gameKeys = new Set([
+      'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+      ' ', 'Space', // Space can be ' ' or 'Space'
+      'w', 'a', 's', 'd',
+      'W', 'A', 'S', 'D'
+    ]);
+
+    if (gameKeys.has(e.key)) {
+      e.preventDefault();
+    }
+
     if (!this.keysDown.has(e.key)) {
       this.keysPressed.add(e.key);
     }
