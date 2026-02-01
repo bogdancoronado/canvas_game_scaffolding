@@ -1,30 +1,57 @@
-/**
- * Interface for entities that need cleanup when the game stops.
- * Implement this for entities that hold event listeners, timers, or external resources.
- */
-export interface Destroyable {
-  destroy(): void;
-}
+import { InputManager } from './input/InputManager';
+import { Scene } from './core/Scene';
 
 /**
  * Abstract Game base class
- * Handles canvas setup, high-DPI scaling, resize events, and the RAF loop.
- * Extend this class and implement update() and render() to create a game.
+ * 
+ * Handles:
+ * - Canvas setup and high-DPI scaling
+ * - Game loop with delta time
+ * - Input management (keyboard, mouse, touch)
+ * - Scene management
+ * - Pause/resume functionality
+ * 
+ * Two usage patterns are supported:
+ * 
+ * 1. **Scene-based** (recommended): Set a scene and let it handle update/render
+ *    ```typescript
+ *    class MyGame extends Game {
+ *      constructor() {
+ *        super();
+ *        this.setScene(new GameplayScene());
+ *      }
+ *    }
+ *    ```
+ * 
+ * 2. **Direct override**: Override update/render for simple games
+ *    ```typescript
+ *    class SimpleGame extends Game {
+ *      update(dt: number) { ... }
+ *      render(ctx: CanvasRenderingContext2D) { ... }
+ *    }
+ *    ```
  */
 export abstract class Game {
   protected canvas: HTMLCanvasElement;
   protected ctx: CanvasRenderingContext2D;
+
+  /** Unified input manager for keyboard, mouse, and touch */
+  protected input: InputManager;
+
+  /** Currently active scene, if any */
+  protected scene: Scene | null = null;
+
   private lastTime: number = 0;
   private running: boolean = false;
   private paused: boolean = false;
-
-  /** Registered entities that will be destroyed when the game stops */
-  private entities: Destroyable[] = [];
 
   /** Bound resize handler for proper cleanup */
   private boundResize = this.resize.bind(this);
 
   constructor(canvasId: string = 'game-canvas') {
+    // Create input manager first (starts listening immediately)
+    this.input = new InputManager();
+
     // Create and setup canvas
     this.canvas = document.createElement('canvas');
     this.canvas.id = canvasId;
@@ -45,6 +72,8 @@ export abstract class Game {
     this.start();
   }
 
+  // === Getters ===
+
   /** Current canvas width in CSS pixels */
   get width(): number {
     return window.innerWidth;
@@ -60,17 +89,44 @@ export abstract class Game {
     return this.paused;
   }
 
+  // === Scene Management ===
+
+  /**
+   * Set the active scene.
+   * The previous scene's onExit() is called, then the new scene's onEnter().
+   */
+  setScene(scene: Scene): void {
+    if (this.scene) {
+      this.scene.onExit();
+    }
+    this.scene = scene;
+    scene._setGame(this);
+    scene.onEnter();
+  }
+
+  /**
+   * Get the current scene.
+   */
+  getScene(): Scene | null {
+    return this.scene;
+  }
+
+  // === Pause Control ===
+
   /** Pause the game - updates stop but rendering continues */
   public pause(): void {
-    this.paused = true;
+    if (!this.paused) {
+      this.paused = true;
+      this.scene?.onPause();
+    }
   }
 
   /** Resume the game from paused state */
   public resume(): void {
     if (this.paused) {
       this.paused = false;
-      // Reset lastTime to prevent large dt spike after unpause
       this.lastTime = performance.now();
+      this.scene?.onResume();
     }
   }
 
@@ -83,14 +139,7 @@ export abstract class Game {
     }
   }
 
-  /**
-   * Register an entity for automatic cleanup when the game stops.
-   * Returns the entity for chaining.
-   */
-  protected registerEntity<T extends Destroyable>(entity: T): T {
-    this.entities.push(entity);
-    return entity;
-  }
+  // === Canvas Management ===
 
   /**
    * Handle window resize and high-DPI scaling
@@ -113,6 +162,8 @@ export abstract class Game {
     this.onResize();
   }
 
+  // === Lifecycle ===
+
   /** Start the game loop */
   protected start(): void {
     this.running = true;
@@ -127,12 +178,17 @@ export abstract class Game {
   public stop(): void {
     this.running = false;
 
+    // Cleanup scene
+    if (this.scene) {
+      this.scene.onExit();
+      this.scene = null;
+    }
+
+    // Cleanup input
+    this.input.destroy();
+
     // Remove window listeners
     window.removeEventListener('resize', this.boundResize);
-
-    // Destroy all registered entities
-    this.entities.forEach((entity) => entity.destroy());
-    this.entities = [];
 
     // Remove canvas from DOM
     this.canvas.remove();
@@ -142,32 +198,54 @@ export abstract class Game {
   private loop(currentTime: number): void {
     if (!this.running) return;
 
-    // Always render, but only update when not paused
+    // Update logic (only when not paused)
     if (!this.paused) {
-      const deltaTime = Math.min((currentTime - this.lastTime) / 1000, 0.1); // Cap dt to avoid spiral of death
+      const deltaTime = Math.min((currentTime - this.lastTime) / 1000, 0.1);
       this.lastTime = currentTime;
-      this.update(deltaTime);
+
+      if (this.scene) {
+        this.scene.update(deltaTime);
+      } else {
+        this.update(deltaTime);
+      }
     }
 
-    this.render();
+    // Render (always, even when paused)
+    if (this.scene) {
+      this.scene.render(this.ctx);
+    } else {
+      this.render();
+    }
+
+    // Clear per-frame input state AFTER both update and render
+    // (render may check input for pause toggle)
+    this.input.endFrame();
 
     requestAnimationFrame((time) => this.loop(time));
   }
 
-  /**
-   * Update game logic - called every frame
-   * @param dt Delta time in seconds since last frame
-   */
-  protected abstract update(dt: number): void;
+  // === Abstract Methods ===
+  // Override these for simple games without scenes
 
   /**
-   * Render the game - called every frame after update
+   * Update game logic - called every frame when not paused.
+   * Override this for simple games, or use scenes for complex games.
    */
-  protected abstract render(): void;
+  protected update(_dt: number): void {
+    // Default: no-op. Override in subclass or use scenes.
+  }
 
   /**
-   * Called when the window is resized
-   * Override to reposition game objects
+   * Render the game - called every frame.
+   * Override this for simple games, or use scenes for complex games.
+   */
+  protected render(): void {
+    // Default: no-op. Override in subclass or use scenes.
+  }
+
+  /**
+   * Called when the window is resized.
+   * Override to reposition game objects.
    */
   protected onResize(): void {
     // Default: no-op. Override in subclass if needed.

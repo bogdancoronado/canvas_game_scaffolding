@@ -1,3 +1,5 @@
+import type { Entity } from '../core/Entity';
+import { Vector3 } from '../utils/Vector3';
 import type { AABB } from '../utils/math';
 
 /**
@@ -14,47 +16,59 @@ const ROW_COLORS = [
 
 /**
  * Brick entity - destroyed when hit by ball
+ * Implements Entity interface for EntityManager compatibility.
  */
-export class Brick {
-  readonly x: number;
-  readonly y: number;
+export class Brick implements Entity {
+  position: Vector3;
+  destroyed = false;
   readonly width: number;
   readonly height: number;
   readonly color: string;
-  alive: boolean = true;
 
   constructor(x: number, y: number, width: number, height: number, rowIndex: number = 0) {
-    this.x = x;
-    this.y = y;
+    this.position = new Vector3(x, y, 1);
     this.width = width;
     this.height = height;
     this.color = ROW_COLORS[rowIndex % ROW_COLORS.length];
   }
 
+  /** Convenience getters for compatibility */
+  get x(): number { return this.position.x; }
+  get y(): number { return this.position.y; }
+
   get bounds(): AABB {
     return {
-      x: this.x,
-      y: this.y,
+      x: this.position.x,
+      y: this.position.y,
       width: this.width,
       height: this.height,
     };
   }
 
+  /** Whether the brick is still active */
+  get alive(): boolean {
+    return !this.destroyed;
+  }
+
   hit(): void {
-    this.alive = false;
+    this.destroyed = true;
+  }
+
+  update(_dt: number): void {
+    // Bricks don't move
   }
 
   render(ctx: CanvasRenderingContext2D): void {
-    if (!this.alive) return;
+    if (this.destroyed) return;
 
     ctx.fillStyle = this.color;
     ctx.beginPath();
-    ctx.roundRect(this.x, this.y, this.width, this.height, 3);
+    ctx.roundRect(this.position.x, this.position.y, this.width, this.height, 3);
     ctx.fill();
 
     // Subtle highlight
     ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-    ctx.fillRect(this.x + 2, this.y + 2, this.width - 4, 4);
+    ctx.fillRect(this.position.x + 2, this.position.y + 2, this.width - 4, 4);
   }
 }
 

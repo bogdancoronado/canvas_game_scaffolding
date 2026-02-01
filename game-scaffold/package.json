@@ -8,11 +8,16 @@
     "build": "tsc && vite build",
     "build:mobile": "vite build && npx cap sync",
     "open:android": "npx cap open android",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:run": "vitest run"
   },
   "devDependencies": {
+    "@types/jsdom": "^27.0.0",
+    "jsdom": "^27.4.0",
     "typescript": "~5.9.3",
-    "vite": "^7.2.4"
+    "vite": "^7.2.4",
+    "vitest": "^4.0.18"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.2",

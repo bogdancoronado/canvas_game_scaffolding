@@ -6,6 +6,8 @@ type GameState = 'playing' | 'won' | 'lost';
 
 /**
  * Arkanoid Game - extends Game base class
+ * 
+ * Uses the framework's InputManager for all input handling.
  */
 export class ArkanoidGame extends Game {
   private paddle: Paddle;
@@ -14,15 +16,6 @@ export class ArkanoidGame extends Game {
   private state: GameState = 'playing';
   private lives: number = 3;
   private score: number = 0;
-  private keys: Set<string> = new Set();
-
-  // Bound event handlers for proper cleanup
-  private boundKeyDown = this.handleKeyDown.bind(this);
-  private boundKeyUp = this.handleKeyUp.bind(this);
-  private boundMouseMove = this.handleMouseMove.bind(this);
-  private boundTouchMove = this.handleTouchMove.bind(this);
-  private boundClick = this.handleClick.bind(this);
-  private boundTouchStart = this.handleTouchStart.bind(this);
 
   constructor() {
     super('game-canvas');
@@ -31,21 +24,7 @@ export class ArkanoidGame extends Game {
     this.paddle = new Paddle(this.width / 2, this.height - 40);
     this.ball = new Ball(this.width / 2, this.height - 60);
 
-    this.setupInputs();
     this.resetLevel();
-  }
-
-  public override stop(): void {
-    // Remove all input listeners
-    window.removeEventListener('keydown', this.boundKeyDown);
-    window.removeEventListener('keyup', this.boundKeyUp);
-    window.removeEventListener('mousemove', this.boundMouseMove);
-    window.removeEventListener('touchmove', this.boundTouchMove);
-    window.removeEventListener('click', this.boundClick);
-    window.removeEventListener('touchstart', this.boundTouchStart);
-
-    // Call parent cleanup
-    super.stop();
   }
 
   protected onResize(): void {
@@ -65,83 +44,46 @@ export class ArkanoidGame extends Game {
     this.ball = new Ball(this.paddle.x, this.paddle.y - 20);
   }
 
-  // Input handler methods
-  private handleKeyDown(e: KeyboardEvent): void {
-    // Toggle pause on Escape (only during gameplay)
-    if (e.key === 'Escape' && this.state === 'playing') {
-      this.togglePause();
-      return;
-    }
-    this.keys.add(e.key);
-  }
+  protected update(dt: number): void {
 
-  private handleKeyUp(e: KeyboardEvent): void {
-    this.keys.delete(e.key);
-  }
-
-  private handleMouseMove(e: MouseEvent): void {
-    this.paddle.setTarget(e.clientX);
-  }
-
-  private handleTouchMove(e: TouchEvent): void {
-    e.preventDefault();
-    if (e.touches.length > 0) {
-      this.paddle.setTarget(e.touches[0].clientX);
-    }
-  }
-
-  private handleClick(): void {
-    this.handleRestart();
-  }
-
-  private handleTouchStart(): void {
-    this.handleRestart();
-  }
-
-  private setupInputs(): void {
-    window.addEventListener('keydown', this.boundKeyDown);
-    window.addEventListener('keyup', this.boundKeyUp);
-    window.addEventListener('mousemove', this.boundMouseMove);
-    window.addEventListener('touchmove', this.boundTouchMove, { passive: false });
-    window.addEventListener('click', this.boundClick);
-    window.addEventListener('touchstart', this.boundTouchStart);
-  }
-
-  private handleRestart(): void {
-    if (this.state === 'won' || this.state === 'lost') {
+    // Handle restart on click/tap when game is over
+    if ((this.state === 'won' || this.state === 'lost') && this.input.isPointerPressed()) {
       this.lives = 3;
       this.score = 0;
       this.resetLevel();
+      return;
     }
-  }
 
-  protected update(dt: number): void {
     if (this.state !== 'playing') return;
 
-    // Keyboard input
-    if (this.keys.has('ArrowLeft') || this.keys.has('a')) {
+    // Keyboard input for paddle movement
+    if (this.input.isKeyDown('ArrowLeft') || this.input.isKeyDown('a')) {
       this.paddle.move(-1, dt, this.width);
     }
-    if (this.keys.has('ArrowRight') || this.keys.has('d')) {
+    if (this.input.isKeyDown('ArrowRight') || this.input.isKeyDown('d')) {
       this.paddle.move(1, dt, this.width);
     }
 
-    this.paddle.update(dt, this.width);
+    // Mouse/touch input for paddle position
+    const pointer = this.input.pointerPosition;
+    if (pointer) {
+      this.paddle.setTarget(pointer.x);
+    }
+
+    this.paddle.setScreenWidth(this.width);
+    this.paddle.update(dt);
 
     // Store ball position before movement for CCD
-    const ballPreviousPosition = this.ball.position.clone();
-    this.ball.update(dt);
+    const ballPrevPos = new Vector2(this.ball.position.x, this.ball.position.y);
+    this.ball.move(dt);
 
-    this.handleCollisions(ballPreviousPosition, dt);
+    this.handleCollisions(ballPrevPos, dt);
     this.checkWinCondition();
   }
 
   /**
    * Handle all collision detection and response.
    * Uses CCD (Continuous Collision Detection) for brick collisions to prevent tunneling.
-   * 
-   * @param ballPreviousPosition - Ball position before this frame's movement
-   * @param dt - Delta time for this frame (unused but available for future physics)
    */
   private handleCollisions(ballPreviousPosition: Vector2, _dt: number): void {
     const ball = this.ball;
@@ -174,7 +116,6 @@ export class ArkanoidGame extends Game {
     }
 
     // Brick collisions using CCD (Continuous Collision Detection)
-    // This prevents the ball from tunneling through thin bricks at high speed
     const ballMovement = new Vector2(
       ball.position.x - ballPreviousPosition.x,
       ball.position.y - ballPreviousPosition.y
@@ -183,8 +124,7 @@ export class ArkanoidGame extends Game {
     for (const brick of this.bricks) {
       if (!brick.alive) continue;
 
-      // Expand the brick bounds by ball radius to treat the ball as a point
-      // This is a common technique: "Minkowski sum" collision
+      // Expand the brick bounds by ball radius (Minkowski sum)
       const expandedBrickBounds = {
         x: brick.bounds.x - ball.radius,
         y: brick.bounds.y - ball.radius,
@@ -198,7 +138,9 @@ export class ArkanoidGame extends Game {
         this.score += 10;
 
         // Move ball to contact point (slightly offset to prevent re-collision)
-        ball.position = hit.contactPoint.add(hit.contactNormal.scale(0.1));
+        const newPos = hit.contactPoint.add(hit.contactNormal.scale(0.1));
+        ball.position.x = newPos.x;
+        ball.position.y = newPos.y;
 
         // Reflect based on which face was hit
         if (hit.contactNormal.x !== 0) {
@@ -220,6 +162,11 @@ export class ArkanoidGame extends Game {
   }
 
   protected render(): void {
+    // Handle pause toggle (must be in render since it runs even when paused)
+    if (this.input.isKeyPressed('Escape') && (this.state === 'playing' || this.isPaused)) {
+      this.togglePause();
+    }
+
     const ctx = this.ctx;
 
     // Background

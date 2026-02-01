@@ -1,18 +1,22 @@
+import type { Entity } from '../core/Entity';
+import { Vector3 } from '../utils/Vector3';
 import { Vector2 } from '../utils/math';
 import type { AABB } from '../utils/math';
 
 /**
  * Ball entity - bounces around and destroys bricks
+ * Implements Entity interface for EntityManager compatibility.
  */
-export class Ball {
-  position: Vector2;
+export class Ball implements Entity {
+  position: Vector3;
   velocity: Vector2;
+  destroyed = false;
   readonly radius: number;
   readonly speed: number;
   readonly color: string = '#e94560';
 
   constructor(x: number, y: number, radius: number = 8, speed: number = 400) {
-    this.position = new Vector2(x, y);
+    this.position = new Vector3(x, y, 1); // z=1 for standard 2D
     this.radius = radius;
     this.speed = speed;
     // Start with random upward angle
@@ -29,8 +33,18 @@ export class Ball {
     };
   }
 
-  update(dt: number): void {
-    this.position = this.position.add(this.velocity.scale(dt));
+  update(_dt: number): void {
+    // Position updated via velocity in game logic, not here
+    // This allows CCD to work correctly
+  }
+
+  /**
+   * Move the ball by its velocity for the given time step.
+   * Called by game code AFTER storing previous position for CCD.
+   */
+  move(dt: number): void {
+    this.position.x += this.velocity.x * dt;
+    this.position.y += this.velocity.y * dt;
   }
 
   reflectX(): void {
@@ -45,10 +59,8 @@ export class Ball {
    * Reflect off paddle with angle based on hit position
    */
   reflectOffPaddle(paddleCenterX: number, paddleWidth: number): void {
-    // Calculate hit position relative to paddle center (-1 to 1)
     const hitPos = (this.position.x - paddleCenterX) / (paddleWidth / 2);
-    // Clamp and create new angle
-    const maxAngle = Math.PI / 3; // 60 degrees max
+    const maxAngle = Math.PI / 3;
     const angle = -Math.PI / 2 + hitPos * maxAngle;
     this.velocity = new Vector2(
       Math.cos(angle) * this.speed,
