@@ -1,8 +1,8 @@
 # Game Framework Infrastructure Design
 
-> **Document Version:** 1.1  
+> **Document Version:** 2.0  
 > **Last Updated:** January 2026  
-> **Audience:** Game Developers, Contributors, and Technical Stakeholders
+> **Status:** Current
 
 ---
 
@@ -19,14 +19,16 @@ This document describes the architectural design of a cross-platform 2D game fra
 3. [Technology Stack](#technology-stack)
 4. [Core Components](#core-components)
    - [The Game Loop: Update vs Render](#the-game-loop-update-vs-render)
-   - [Abstract Game Class](#abstract-game-class)
+   - [Game Base Class](#game-base-class)
    - [The requestAnimationFrame Mechanism](#the-requestanimationframe-mechanism)
    - [Canvas Management](#canvas-management)
    - [Collision Detection with AABB](#collision-detection-with-aabb)
-5. [Cross-Platform Input Handling](#cross-platform-input-handling)
-6. [Mobile Deployment with Capacitor](#mobile-deployment-with-capacitor)
-7. [Extensibility Model](#extensibility-model)
-8. [Code Reference Guide](#code-reference-guide)
+5. [Input System](#input-system)
+6. [Entity System](#entity-system)
+7. [Scene System](#scene-system)
+8. [Mobile Deployment with Capacitor](#mobile-deployment-with-capacitor)
+9. [Extensibility Model](#extensibility-model)
+10. [Code Reference Guide](#code-reference-guide)
 
 ---
 
@@ -108,22 +110,34 @@ graph TB
 ```
 game-scaffold/
 ├── src/
-│   ├── Game.ts              # Abstract base class
-│   ├── ArkanoidGame.ts      # Concrete implementation
+│   ├── Game.ts              # Base game class
+│   ├── ArkanoidGame.ts      # Game implementation
 │   ├── main.ts              # Entry point
 │   ├── style.css            # Mobile-optimized styles
-│   ├── entities/            # Game object classes
+│   ├── core/                # Framework systems
+│   │   ├── Entity.ts        # Entity interface
+│   │   ├── EntityManager.ts # Entity lifecycle
+│   │   ├── Scene.ts         # Scene abstraction
+│   │   └── index.ts
+│   ├── input/               # Input handling
+│   │   ├── InputManager.ts  # Unified input system
+│   │   └── index.ts
+│   ├── entities/            # Game objects
 │   │   ├── Ball.ts
 │   │   ├── Paddle.ts
 │   │   ├── Brick.ts
-│   │   └── index.ts         # Barrel export
+│   │   └── index.ts
 │   └── utils/
-│       └── math.ts          # Vector2, AABB, collision helpers
+│       ├── math.ts          # Vector2, AABB, CCD
+│       ├── Vector3.ts       # 3D vector with projection
+│       ├── index.ts
+│       └── __tests__/       # Unit tests
 ├── android/                 # Capacitor Android project
 ├── dist/                    # Production build output
 ├── docs/                    # Technical documentation
 ├── index.html               # HTML shell with viewport meta
 ├── vite.config.ts           # Build configuration
+├── vitest.config.ts         # Test configuration
 ├── capacitor.config.ts      # Mobile deployment config
 └── package.json             # Dependencies and scripts
 ```
@@ -601,99 +615,250 @@ Note: The ball is a circle, but we treat it as a square bounding box for collisi
 
 ---
 
-## Cross-Platform Input Handling
+## Input System
 
-### The Challenge
+### The "Frame-Based" Input Model
 
-Games need to respond to player input, but input methods differ across platforms:
+#### Why Not Event Listeners?
 
-| Platform | Primary Input | Events |
-|----------|---------------|--------|
-| Desktop Browser | Mouse + Keyboard | `mousemove`, `keydown`, `keyup` |
-| Mobile Browser | Touch | `touchmove`, `touchstart`, `touchend` |
-| Mobile App (Capacitor) | Touch | Same touch events inside WebView |
+In traditional web development, we rely on event listeners (`keydown`, `click`) to trigger actions. However, in game development, this "push" model creates synchronization problems:
 
-### Framework Approach: Unified Input in Game Classes
+1.  **Timing Mismatches**: An event might fire *during* a frame calculation, changing state unpredictably in the middle of physics logic.
+2.  **State Persistence**: If a player holds a key, the OS sends repeated `keydown` events at a rate determined by OS settings, not the game's framerate.
+3.  **Complexity**: Managing dozens of event listeners across different game states (menu vs game) becomes unwieldy.
 
-The framework does **not** provide abstract input methods in the base `Game` class. Instead, each game handles its own input directly using standard browser event listeners. This design was chosen because:
+#### The Solution: Polling
 
-1. **Input is Game-Specific**: A puzzle game needs tap detection; a racing game needs tilt sensors; Arkanoid needs horizontal position. There's no one-size-fits-all abstraction.
+Instead of reacting to events immediately, the `InputManager` captures them and stores the state. The game loop then **polls** this state at the beginning of each frame. This ensures that:
 
-2. **Browser APIs Work Everywhere**: Standard `touchmove` and `mousemove` events work identically in the browser and inside Capacitor's WebView. No special handling needed.
+-   **Determinism**: Input state is constant throughout the entire `update()` call.
+-   **Synchronization**: Actions happen exactly when the game is ready to process them.
+-   **Uniformity**: Keyboard, Mouse, and Touch data are accessed via the same API.
 
-3. **Flexibility**: Games can easily add game-specific gestures (swipes, pinches, long-presses) without being constrained by a framework abstraction.
+### InputManager Deep Dive
 
-### How Mobile Touch Works
+**Location:** [src/input/InputManager.ts](file:///Users/bgdan/projects/experimental/canvas_game/game-scaffold/src/input/InputManager.ts)
 
-On mobile devices (both browser and Capacitor app), the same code handles touch input:
+The `InputManager` categorizes input interactions into two types: **Continuous** (holding a button) and **Discrete** (pressing a button).
 
-```typescript
-// From ArkanoidGame.ts - works on desktop AND mobile
-window.addEventListener('mousemove', (e) => {
-  this.paddle.setTarget(e.clientX);
-});
+#### 1. Discrete vs. Continuous Actions
 
-window.addEventListener('touchmove', (e) => {
-  e.preventDefault();  // Prevent page scrolling
-  if (e.touches.length > 0) {
-    this.paddle.setTarget(e.touches[0].clientX);
-  }
-}, { passive: false });
-```
+| Action Type | Examples | API Method | Logic |
+| :--- | :--- | :--- | :--- |
+| **Continuous** | Movement, accelerating | `isKeyDown('ArrowUp')` | True as long as key is held |
+| **Discrete** | Jumping, firing, pausing | `isKeyPressed('Space')` | True for **only one frame** |
 
-Both mouse and touch use the same `paddle.setTarget()` method. The paddle doesn't care whether the X coordinate came from a mouse or a finger—it just moves to that position.
+#### 2. The Frame Lifecycle
 
-### Mobile-Specific Configuration
+The system requires a strict lifecycle to manage discrete events correctly. If we didn't clear the "pressed" state at the end of the frame, a single button press might trigger a jump for multiple consecutive frames!
 
-The framework handles mobile quirks through CSS and HTML:
+```mermaid
+sequenceDiagram
+    participant User
+    participant Browser
+    participant InputManager
+    participant GameLoop
 
-**`index.html` — Viewport meta tag prevents zoom:**
-```html
-<meta name="viewport" content="width=device-width, initial-scale=1.0, 
-      maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-```
+    Note over InputManager: Frame N Starts
 
-**`style.css` — Prevents unwanted touch behaviors:**
-```css
-html, body {
-  /* Disable touch highlights when tapping */
-  -webkit-tap-highlight-color: transparent;
-  
-  /* Prevent text selection on long-press */
-  -webkit-user-select: none;
-  user-select: none;
-  
-  /* Disable pull-to-refresh and scroll bounce */
-  overscroll-behavior: none;
-  touch-action: none;
-}
-```
+    rect rgb(240, 248, 255)
+    Note right of User: Async Event Phase
+    User->>Browser: Presses Key
+    Browser->>InputManager: 'keydown' event
+    InputManager->>InputManager: Add to keysDown set
+    InputManager->>InputManager: Add to keysPressed set
+    end
 
-### Adding Custom Input Handling
+    rect rgb(255, 240, 245)
+    Note right of User: Game Loop Phase
+    GameLoop->>InputManager: isKeyPressed()? -> true
+    GameLoop->>GameModel: Fire Bullet!
+    end
 
-If you're building a new game that needs specialized input, simply add event listeners in your game class:
-
-```typescript
-export class TiltGame extends Game {
-  constructor() {
-    super();
+    rect rgb(240, 255, 240)
+    Note right of User: Cleanup Phase
+    GameLoop->>InputManager: endFrame()
+    Note over InputManager: Clear keysPressed set
+    Note over InputManager: (keysDown remains true)
+    end
     
-    // Use device orientation (works in Capacitor!)
-    window.addEventListener('deviceorientation', (e) => {
-      this.handleTilt(e.gamma); // Left/right tilt
-    });
+    Note over InputManager: Frame N+1 Starts
+    GameLoop->>InputManager: isKeyPressed()? -> false
+    GameLoop->>InputManager: isKeyDown()? -> true
+```
+
+#### 3. Unified Pointer System
+
+Handling Mouse and Touch separately leads to duplicated code. The `InputManager` unifies them into a "Pointer" abstraction.
+
+-   **Primary Pointer**: The left mouse button OR the first active finger touch.
+-   **Position**: `pointerPosition` tracks x/y coordinates in screen space.
+
+This means you can write one logic block for "drag paddle" that works instantly on both Desktop and Mobile.
+
+#### Implementation Reference
+
+```typescript
+// Example: Entity accessing input
+update(dt: number) {
+  // Continuous: Move while holding
+  if (this.input.isKeyDown('ArrowRight')) {
+    this.position.x += this.speed * dt;
+  }
+
+  // Discrete: Jump once per press
+  if (this.input.isKeyPressed('Space')) {
+    this.velocity.y = -500;
   }
 }
 ```
 
-For more advanced input (like vibration or haptic feedback), you can use Capacitor plugins:
+---
+
+## Entity System
+
+### The "Deferred Mutation" Pattern
+
+#### The Problem: Modifying Collections During Iteration
+
+A common bug in game engines occurs when an entity tries to create or destroy another entity *during* the update loop.
 
 ```typescript
-import { Haptics } from '@capacitor/haptics';
-
-// Vibrate on collision
-Haptics.vibrate();
+// BAD: Modifying array while iterating
+entities.forEach(entity => {
+  entity.update();
+  if (entity.isDead) {
+    entities.splice(i, 1); // CRASH! Index shifts, skipping elements
+  }
+  if (entity.shoots) {
+    entities.push(new Bullet()); // Might be updated immediately in this frame!
+  }
+});
 ```
+
+#### The Solution: Command Queues
+
+The `EntityManager` solves this by decoupling the **request** to change the list from the **execution** of that change.
+
+1.  **Queue Phase**: When `add()` or `remove()` is called, we just push the entity to a temporary `toAdd` or `toRemove` list.
+2.  **Execution Phase**: At the *start* of the next frame, we process these queues safely.
+
+### EntityManager Deep Dive
+
+**Location:** [src/core/EntityManager.ts](file:///Users/bgdan/projects/experimental/canvas_game/game-scaffold/src/core/EntityManager.ts)
+
+#### Update Cycle Diagram
+
+This safe lifecycle ensures that the list of entities remains stable while `update()` is running.
+
+```mermaid
+graph TD
+    Start((Start Frame)) --> Phase1[1. Process 'toAdd' Queue]
+    Phase1 --> Phase2[2. Process 'toRemove' Queue]
+    Phase2 --> Phase3[3. Update All Entities]
+    Phase3 --> Phase4[4. Prune 'destroyed' Entities]
+    Phase4 --> End((End Frame))
+
+    style Phase1 fill:#e1f5fe
+    style Phase2 fill:#ffebee
+    style Phase3 fill:#e8f5e9
+    style Phase4 fill:#fce4ec
+```
+
+#### Z-Index Rendering (Painter's Algorithm)
+
+The framework uses a simple **Painter's Algorithm** for depth. It sorts entities by their `position.z` before rendering.
+
+-   **High Z**: "Further away" -> Drawn first -> Background
+-   **Low Z**: "Closer" -> Drawn last -> Foreground
+
+```typescript
+render(ctx) {
+  // Sort descending: Z=10 draws before Z=1
+  const sorted = entities.sort((a, b) => b.position.z - a.position.z);
+  sorted.forEach(e => e.render(ctx));
+}
+```
+
+This allows pseudo-3D effects (parallax) without a real 3D engine.
+
+### Entity Interface
+
+**Location:** [src/core/Entity.ts](file:///Users/bgdan/projects/experimental/canvas_game/game-scaffold/src/core/Entity.ts)
+
+```typescript
+interface Entity {
+  position: Vector3;          // World position (z for depth)
+  readonly bounds: AABB;      // Collision box
+  update(dt: number): void;   // Per-frame logic
+  render(ctx: CanvasRenderingContext2D): void;
+  destroyed: boolean;         // Mark for removal
+}
+```
+
+---
+
+## Scene System
+
+### The State Pattern for Games
+
+As games grow, putting all logic in one `Game` class becomes unmanageable. You need different modes: "Menu", "Playing", "GameOver", "credits".
+
+The **Scene System** applies the **State Pattern** to solve this. The `Game` class delegates all `update` and `render` calls to the *current active scene*.
+
+### Scene Deep Dive
+
+**Location:** [src/core/Scene.ts](file:///Users/bgdan/projects/experimental/canvas_game/game-scaffold/src/core/Scene.ts)
+
+A `Scene` is essentially a mini-Game. It has its own `EntityManager` and lifecycle hooks. 
+
+#### Lifecycle Hooks
+
+Scenes have a rich lifecycle that allows them to manage resources effectively.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Inactive
+    
+    Inactive --> Active: setScene(NewScene)
+    Note on link: onEnter() called
+    
+    state Active {
+        Running --> Paused: game.pause()
+        Note on link: onPause()
+        
+        Paused --> Running: game.resume()
+        Note on link: onResume()
+    }
+    
+    Active --> Inactive: setScene(Other)
+    Note on link: onExit()
+```
+
+-   **onEnter()**: Setup. Load levels, spawn entities, start music.
+-   **onExit()**: Cleanup. Stop music, clear entities (`this.entities.clear()` happens automatically).
+-   **onPause/onResume()**: Handle app backgrounding (e.g. stop timers but keep entities).
+
+#### Implementation Example
+
+```typescript
+class MainMenuScene extends Scene {
+  onEnter() {
+    this.entities.add(new Button("Start", () => {
+      this.game.setScene(new GameplayScene());
+    }));
+  }
+  
+  render(ctx) {
+    this.entities.render(ctx); // Render buttons
+    ctx.fillText("ARKANOID", 100, 100); // Draw title
+  }
+}
+```
+
+This makes the `Game` class very simple—it just manages the `currentScene` pointer.
+
+
 
 ---
 

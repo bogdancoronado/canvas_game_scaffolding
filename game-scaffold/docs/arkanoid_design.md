@@ -141,6 +141,34 @@ classDiagram
     ArkanoidGame *-- "40" Brick
 ```
 
+### Game Loop Sequence
+
+The specific update flow for Arkanoid:
+
+```mermaid
+sequenceDiagram
+    participant Game
+    participant Paddle
+    participant Ball
+    participant Physics
+
+    Note over Game: Frame Start
+    Game->>Paddle: update(dt)
+    Game->>Ball: update(dt)
+    Game->>Physics: handleCollisions()
+    
+    rect rgb(255, 240, 240)
+    Note right of Physics: Collision Phase
+    Physics->>Physics: Check Walls / Paddle
+    Physics-->>Ball: Reflect Velocity
+    Physics->>Physics: Check Bricks
+    Physics-->>Brick: Mark Destroyed
+    end
+
+    Game->>Game: checkWinCondition()
+    Game->>Game: render()
+```
+
 ### File Organization
 
 ```
