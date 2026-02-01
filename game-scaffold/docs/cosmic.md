@@ -92,7 +92,8 @@ To make a 2D rectangle look like a 3D cube:
 -   **Controls**:
     -   `ArrowLeft` / `A`: Move Left (-x)
     -   `ArrowRight` / `D`: Move Right (+x)
-    -   (Optional) `ArrowUp` / `Space`: Turbo Boost (increases field FOV effect).
+    -   `ESC`: Pause / Resume Game.
+    -   `Space`: Restart Game (on Game Over).
 -   **Bounds**: AABB at $z=1$.
 
 ### CubeObstacle
@@ -118,7 +119,8 @@ Since the player is fixed at $z \approx 1$, we only check collisions when an obs
 // Pseudo-code
 if (obstacle.z < player.z + epsilon && obstacle.z > player.z - epsilon) {
   // We are at the same depth, check 2D overlap
-  if (Math.abs(obstacle.x - player.x) < collisionWidth) {
+  // Threshold reduced to 45 for better visual accuracy
+  if (Math.abs(obstacle.x - player.x) < 45) {
     GameOver();
   }
 }
