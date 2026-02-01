@@ -16,6 +16,7 @@ export abstract class Game {
   protected ctx: CanvasRenderingContext2D;
   private lastTime: number = 0;
   private running: boolean = false;
+  private paused: boolean = false;
 
   /** Registered entities that will be destroyed when the game stops */
   private entities: Destroyable[] = [];
@@ -52,6 +53,34 @@ export abstract class Game {
   /** Current canvas height in CSS pixels */
   get height(): number {
     return window.innerHeight;
+  }
+
+  /** Whether the game is currently paused */
+  get isPaused(): boolean {
+    return this.paused;
+  }
+
+  /** Pause the game - updates stop but rendering continues */
+  public pause(): void {
+    this.paused = true;
+  }
+
+  /** Resume the game from paused state */
+  public resume(): void {
+    if (this.paused) {
+      this.paused = false;
+      // Reset lastTime to prevent large dt spike after unpause
+      this.lastTime = performance.now();
+    }
+  }
+
+  /** Toggle between paused and running states */
+  public togglePause(): void {
+    if (this.paused) {
+      this.resume();
+    } else {
+      this.pause();
+    }
   }
 
   /**
@@ -113,10 +142,13 @@ export abstract class Game {
   private loop(currentTime: number): void {
     if (!this.running) return;
 
-    const deltaTime = Math.min((currentTime - this.lastTime) / 1000, 0.1); // Cap dt to avoid spiral of death
-    this.lastTime = currentTime;
+    // Always render, but only update when not paused
+    if (!this.paused) {
+      const deltaTime = Math.min((currentTime - this.lastTime) / 1000, 0.1); // Cap dt to avoid spiral of death
+      this.lastTime = currentTime;
+      this.update(deltaTime);
+    }
 
-    this.update(deltaTime);
     this.render();
 
     requestAnimationFrame((time) => this.loop(time));

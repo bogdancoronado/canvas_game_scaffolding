@@ -67,6 +67,11 @@ export class ArkanoidGame extends Game {
 
   // Input handler methods
   private handleKeyDown(e: KeyboardEvent): void {
+    // Toggle pause on Escape (only during gameplay)
+    if (e.key === 'Escape' && this.state === 'playing') {
+      this.togglePause();
+      return;
+    }
     this.keys.add(e.key);
   }
 
@@ -230,11 +235,42 @@ export class ArkanoidGame extends Game {
     this.renderHUD();
 
     // Overlay messages
-    if (this.state === 'won') {
+    if (this.isPaused) {
+      this.renderPauseOverlay();
+    } else if (this.state === 'won') {
       this.renderMessage('🎉 YOU WIN!', 'Tap to play again');
     } else if (this.state === 'lost') {
       this.renderMessage('💀 GAME OVER', 'Tap to try again');
     }
+  }
+
+  private renderPauseOverlay(): void {
+    const ctx = this.ctx;
+
+    // Semi-transparent overlay
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    // Pause icon (two vertical bars)
+    ctx.fillStyle = '#fff';
+    const barWidth = 20;
+    const barHeight = 60;
+    const gap = 20;
+    const centerX = this.width / 2;
+    const centerY = this.height / 2 - 30;
+    ctx.fillRect(centerX - gap / 2 - barWidth, centerY - barHeight / 2, barWidth, barHeight);
+    ctx.fillRect(centerX + gap / 2, centerY - barHeight / 2, barWidth, barHeight);
+
+    // Pause text
+    ctx.font = 'bold 24px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('PAUSED', this.width / 2, this.height / 2 + 40);
+
+    // Instructions
+    ctx.font = '16px system-ui, sans-serif';
+    ctx.fillStyle = '#aaa';
+    ctx.fillText('Press ESC to resume', this.width / 2, this.height / 2 + 70);
   }
 
   private renderHUD(): void {
